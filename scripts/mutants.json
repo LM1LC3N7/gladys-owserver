@@ -290,8 +290,8 @@
   {
     "name": "r1 stop: wait timer not cleared",
     "file": "src/app.js",
-    "from": "        this.timers.clearTimeout(timer);\n      }\n      await this.saveState();\n    });",
-    "to": "      }\n      await this.saveState();\n    });"
+    "from": "        this.timers.clearTimeout(timer);\n      }\n      await this.saveState(STOP_SAVE_WAIT);\n    });",
+    "to": "      }\n      await this.saveState(STOP_SAVE_WAIT);\n    });"
   },
   {
     "name": "r1 stop: client not closed",
@@ -302,13 +302,13 @@
   {
     "name": "I1 save: not bounded",
     "file": "src/app.js",
-    "from": "const result = await this.within(job, DATA_WAIT);",
+    "from": "const result = await this.within(job, limit);",
     "to": "const result = { done: true, value: await job };"
   },
   {
     "name": "I1 save: several at a time",
     "file": "src/app.js",
-    "from": "if (this.saving && !(await this.within(this.saving, DATA_WAIT)).done) {",
+    "from": "if (this.saving && !(await this.within(this.saving, limit)).done) {",
     "to": "if (false) {"
   },
   {
@@ -358,5 +358,47 @@
     "file": "src/owserver/families.js",
     "from": "const ENTRY = /^\\/([0-9A-F]{2})\\.([0-9A-F]{12})$/;",
     "to": "const ENTRY = /\\/([0-9A-F]{2})\\.([0-9A-F]{12})/;"
+  },
+  {
+    "name": "r2 stop: session kept",
+    "file": "src/app.js",
+    "from": "      this.session?.client?.close();\n      this.session = undefined;\n      if (this.dataTimer",
+    "to": "      this.session?.client?.close();\n      if (this.dataTimer"
+  },
+  {
+    "name": "r2 reset even if unchanged",
+    "file": "src/app.js",
+    "from": "      if (changed) {\n        this.resetReads();",
+    "to": "      if (true) {\n        this.resetReads();"
+  },
+  {
+    "name": "r2 change never seen",
+    "file": "src/app.js",
+    "from": "const changed = !first && key !== this.lastKey;",
+    "to": "const changed = false;"
+  },
+  {
+    "name": "r2 writeSlow never reset",
+    "file": "src/app.js",
+    "from": "this.writeSlow = false;\n        if (this.running)",
+    "to": "if (this.running)"
+  },
+  {
+    "name": "r2 test button while stopped",
+    "file": "src/app.js",
+    "from": "return isComplete(this.config) ? this.describeOutcome() : this.currentStatus()[1];",
+    "to": "return this.currentStatus()[1];"
+  },
+  {
+    "name": "r2 ENOTFOUND not unreachable",
+    "file": "src/owserver/client.js",
+    "from": "  'ENOTFOUND',\n",
+    "to": ""
+  },
+  {
+    "name": "r2 EHOSTUNREACH not unreachable",
+    "file": "src/owserver/client.js",
+    "from": "  'EHOSTUNREACH',\n",
+    "to": ""
   }
 ]

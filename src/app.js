@@ -36,6 +36,7 @@ import {
   ROUND_BUDGET,
   STATE_HEARTBEAT,
   STATES_PER_MINUTE,
+  STOP_SAVE_WAIT,
   STOP_WAIT,
   TEST_ANSWER_WITHIN,
 } from './constants.js';
@@ -92,6 +93,8 @@ export class OwserverApp {
     this.config = normalizeConfig();
     /** `{ client, discovered }` of the current address; replaced when it changes. */
     this.session = undefined;
+    /** The key of the last configuration taken (address): survives a stop. */
+    this.lastKey = undefined;
     this.running = false;
     this.timer = undefined;
     this.busy = undefined;
@@ -197,7 +200,7 @@ export class OwserverApp {
         this.timers.clearTimeout(this.dataTimer);
         this.dataTimer = undefined;
       }
-      await this.saveState();
+      await this.saveState(STOP_SAVE_WAIT);
       if (this.busy) {
         let timer;
         await Promise.race([
@@ -208,7 +211,7 @@ export class OwserverApp {
         ]);
         this.timers.clearTimeout(timer);
       }
-      await this.saveState();
+      await this.saveState(STOP_SAVE_WAIT);
     });
   }
 
@@ -233,10 +236,15 @@ export class OwserverApp {
   async doStart(raw) {
     this.doStop();
     const config = normalizeConfig(raw);
-    const first = this.session === undefined;
-    const changed = first || OwserverApp.sessionKey(config) !== OwserverApp.sessionKey(this.config);
+    // Decided on the key of the last configuration taken (it survives a
+    // stop), never on the session (a stop drops it): an address changed
+    // while Gladys was disconnected is a change.
+    const key = OwserverApp.sessionKey(config);
+    const first = this.lastKey === undefined;
+    const changed = !first && key !== this.lastKey;
+    this.lastKey = key;
     this.config = config;
-    if (changed) {
+    if (changed || !this.session) {
       this.session?.client?.close();
       this.session = {
         client: isComplete(config)
@@ -244,7 +252,7 @@ export class OwserverApp {
           : undefined,
         discovered: false,
       };
-      if (!first) {
+      if (changed) {
         this.resetReads();
         this.cursor = 0;
       }
@@ -396,9 +404,9 @@ export class OwserverApp {
    * Writes /data, only once it was read (never over a file not read).
    * @returns {Promise<boolean>} whether it was written.
    */
-  async saveState() {
+  async saveState(limit = DATA_WAIT) {
     // One write at a time: the one still running is waited for, bounded.
-    if (this.saving && !(await this.within(this.saving, DATA_WAIT)).done) {
+    if (this.saving && !(await this.within(this.saving, limit)).done) {
       return false;
     }
     if (this.dataState !== 'ready') {
@@ -432,7 +440,7 @@ export class OwserverApp {
       }
     });
     // A /data that never answers never holds a read nor the stop.
-    const result = await this.within(job, DATA_WAIT);
+    const result = await this.within(job, limit);
     if (!result.done) {
       this.writeSlow = true;
       this.logger.warn('owserver: writing /data takes too long; going on without it');
@@ -795,7 +803,7 @@ export class OwserverApp {
 
   /** The status from what is known now: never a read. */
   currentStatus() {
-    if (!this.session?.client) {
+    if (!isComplete(this.config)) {
       return [false, this.config.invalidAddress ? T.badAddress : T.incomplete];
     }
     const address = addressText(this.config);
@@ -875,7 +883,8 @@ export class OwserverApp {
 
   async testConnection() {
     if (!this.session?.client) {
-      return this.currentStatus()[1];
+      // Stopped (Gladys disconnected) with a complete address: the last read.
+      return isComplete(this.config) ? this.describeOutcome() : this.currentStatus()[1];
     }
     const mono = this.monotonic();
     if (this.busy || this.dueAt(mono) > mono) {

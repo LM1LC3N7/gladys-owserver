@@ -70,6 +70,8 @@ export const STATE_HEARTBEAT = 10 * MINUTE;
 export const TEST_ANSWER_WITHIN = 45 * SECOND;
 /** A stop saves /data, then waits for the read running at most this long and saves again. */
 export const STOP_WAIT = 5 * SECOND;
+/** Each save of a stop waits for /data at most this long (Docker stops after 10 s). */
+export const STOP_SAVE_WAIT = 2 * SECOND;
 /** /data unreadable: read again after this delay; a read waits for it at most this long. */
 export const DATA_RETRY = 10 * SECOND;
 export const DATA_WAIT = 10 * SECOND;

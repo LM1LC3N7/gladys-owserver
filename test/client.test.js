@@ -301,3 +301,21 @@ test('the time bounds of a request are pinned', async () => {
   assert.equal(defaults.requestTimeout, 10_000);
   assert.equal(defaults.idleTimeout, 5_000);
 });
+
+test('a host not found or not routable is unreachable (fake socket, no network)', async () => {
+  const { EventEmitter } = await import('node:events');
+  for (const code of ['ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN']) {
+    const c = new OwClient({
+      host: 'pi.invalid',
+      port: 4304,
+      connect: () => {
+        const socket = new EventEmitter();
+        socket.write = () => {};
+        socket.destroy = () => {};
+        setImmediate(() => socket.emit('error', Object.assign(new Error(code), { code })));
+        return socket;
+      },
+    });
+    await assert.rejects(c.read('/x'), (err) => err.code === 'unreachable', code);
+  }
+});

@@ -23,6 +23,10 @@
 - No `keywords` in the manifest. Category `protocols` only (a hub bringing a
   whole bus of devices). No `countries`: the whole world.
 - Dependabot: the one of the template, unchanged.
+- Category (review r1 h, decided in r2): `protocols` only. A 1-Wire bus
+  brings third-party devices with no dominant domain (probes in a cellar, a
+  pond, a fridge; pulse counters; contacts): neither `climate` nor
+  `environment`.
 
 ## Later
 
@@ -31,11 +35,7 @@
   published (documented). (e) A first read of more than 300 features goes out
   in one `publishChangedStates` (the SDK sends the rest at the next call). (f)
   A state file that is not valid JSON is started again from empty and written
-  over (documented; the floor then rests on the value Gladys holds). (d) No
-  test for `ENOTFOUND` / `EHOSTUNREACH` (they would need a network).
-- To confirm by Louis (review r1, h): category `protocols` only, or also
-  `climate` for the temperatures (rule 2 of the categories spec, §3).
-
+  over (documented; the floor then rests on the value Gladys holds).
 - Outputs of the DS2406, DS2408, DS2413 (PIO), behind an option, never a
   switch for anything a "turn everything off" could trigger.
 - DS2438 humidity and voltages (only when a humidity sensor is wired: the

@@ -65,8 +65,9 @@ export function createServer(bus = defaultBus()) {
     server.options = options;
     const client = {
       closed: false,
-      dirall: (path) => answer(path),
-      read: (path) => answer(path),
+      // A closed client never reaches the server, as the real one.
+      dirall: (path) => (client.closed ? Promise.reject(new OwError('closed')) : answer(path)),
+      read: (path) => (client.closed ? Promise.reject(new OwError('closed')) : answer(path)),
       close() {
         client.closed = true;
         // A request running ends at once, as a closed socket.

@@ -800,3 +800,81 @@ test('a stop waiting for a read that ends by itself: its wait timer is cleared',
   await stopping;
   assert.equal(t.pending.size, 0);
 });
+
+test('an address changed while stopped: waiting, then a read of the new one without the old wait', async () => {
+  const bus = defaultBus();
+  bus['/'] = unreachable();
+  const t = await setup({ server: createServer(bus) });
+  await t.start();
+  // Two failures of A: the next try of A would be in 60 s more.
+  await t.wait(60 * SECOND);
+  assert.equal(t.server.count('/'), 2);
+  await t.app.stop();
+  t.server.bus['/'] = defaultBus()['/'];
+  await t.start({ address: '10.0.0.9' });
+  assert.equal(t.server.options.host, '10.0.0.9');
+  assert.match(status(t.gladys).message.en, /Waiting for the first read of 10\.0\.0\.9/);
+  assert.equal(t.server.count('/'), 2);
+  // The interval from the last read (60 s), not the 120 s left of A.
+  await t.wait(59 * SECOND);
+  assert.equal(t.server.count('/'), 2);
+  await t.wait(1 * SECOND);
+  assert.equal(t.server.count('/'), 3);
+  assert.match(status(t.gladys).message.en, /Connected to owserver 10\.0\.0\.9: 4 of 4/);
+  await t.app.stop();
+});
+
+test('the same address across a stop: nothing reset, no read before the interval', async () => {
+  const t = await setup();
+  await t.start();
+  await t.app.stop();
+  await t.start();
+  assert.equal(t.server.count('/'), 1);
+  assert.match(status(t.gladys).message.en, /Connected to owserver 192\.168\.1\.30: 4 of 4/);
+  assert.match((await t.app.testConnection()).en, /^Read/);
+  await t.wait(59 * SECOND);
+  assert.equal(t.server.count('/'), 1);
+  await t.wait(1 * SECOND);
+  assert.equal(t.server.count('/'), 2);
+  await t.app.stop();
+});
+
+test('the test button while stopped tells the last read, never "enter the address"', async () => {
+  const t = await setup();
+  await t.start();
+  await t.app.stop();
+  const told = await t.app.testConnection();
+  assert.match(told.en, /^Read .*28-4AEC29CDBAAB 21\.56 °C/);
+  assert.equal(t.server.count('/'), 1);
+});
+
+test('a /data write slow once: the note leaves the status when it ends', async () => {
+  const store = createMemoryStore();
+  const t = await setup({ store });
+  await t.start();
+  const realSave = store.save.bind(store);
+  let finish;
+  store.save = (data) =>
+    new Promise((resolve) => {
+      finish = () => realSave(data).then(resolve);
+    });
+  await t.app.acceptCounterDrops();
+  t.server.bus[P(C1D, 'counters.ALL')] = '1,1';
+  await t.advance(60 * SECOND);
+  await t.settle();
+  await t.advance(10 * SECOND);
+  await t.settle();
+  assert.match(status(t.gladys).message.en, /does not finish writing/);
+  store.save = realSave;
+  finish();
+  await t.settle();
+  assert.doesNotMatch(status(t.gladys).message.en, /does not finish writing/);
+  await t.app.stop();
+});
+
+test('the bounds of the /data waits are pinned', async () => {
+  const c = await import('../src/constants.js');
+  assert.equal(c.DATA_WAIT, 10_000);
+  assert.equal(c.STOP_SAVE_WAIT, 2_000);
+  assert.equal(c.STOP_WAIT, 5_000);
+});
