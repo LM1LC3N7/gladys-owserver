@@ -16,7 +16,7 @@ its only runtime dependency. It started from the official JavaScript template.
 ```bash
 npm install
 npm test                                  # node --test, the built-in runner
-node --test test/devices.test.js          # one file
+node --test test/client.test.js           # one file
 node --test --test-name-pattern "plug"    # tests whose name matches
 npm run lint                              # ESLint
 npm run format:check                      # Prettier, as the CI runs it
@@ -32,17 +32,25 @@ pushing.
 
 ```
 index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
-src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
+src/app.js                        the reads, the pace, /data, the status, the buttons
+src/owserver/protocol.js          owserver messages: request bytes, answer reader (pings, bounds)
+src/owserver/client.js            one TCP connection per request, bounded in time and size
+src/owserver/families.js          the 1-Wire families read, strict parsing of their values
+src/devices.js                    the Gladys devices (read-only features)
+src/config.js                     the address and interval of the form, normalized
+src/store.js                      /data (async, never written over a file not read)
+src/i18n.js                       runtime texts { en, fr }
+gladys-assistant-integration.json manifest
 docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
+test/                             node --test, against the SDK's fake Gladys and local TCP servers
 .github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
 ```
+
+Specific rules of this integration: read-only (only `DIRALL` and `READ`
+messages, never `WRITE`); OWFS is GPL-2.0, write from the protocol
+description only; a counter is never published lower than before; text is
+never a 0; the pace (never two reads less than an interval apart) is global
+and kept in `/data`.
 
 ## Rules
 

@@ -1,0 +1,194 @@
+[
+  {
+    "name": "counter: a drop published",
+    "file": "src/app.js",
+    "from": "if (value >= base) {",
+    "to": "if (true) {"
+  },
+  {
+    "name": "counter: the value of Gladys ignored",
+    "file": "src/app.js",
+    "from": "base = Math.max(base, fromGladys);",
+    "to": "base = base + 0;"
+  },
+  {
+    "name": "85: always taken",
+    "file": "src/app.js",
+    "from": "if (before === undefined || Math.abs(before - value) > RESET_NEAR) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "85: taken without a previous value",
+    "file": "src/app.js",
+    "from": "if (before === undefined || Math.abs(before - value) > RESET_NEAR) {",
+    "to": "if (before !== undefined && Math.abs(before - value) > RESET_NEAR) {"
+  },
+  {
+    "name": "interval: not stretched",
+    "file": "src/app.js",
+    "from": "Math.ceil((this.featureCount * 60_000) / STATES_PER_MINUTE),",
+    "to": "0,"
+  },
+  {
+    "name": "pace: no check after /data",
+    "file": "src/app.js",
+    "from": "if (mono < this.dueAt(mono)) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "pace: attempt not saved before the requests",
+    "file": "src/app.js",
+    "from": "await this.saveAttempt(this.now());",
+    "to": ";"
+  },
+  {
+    "name": "/data: written before it was read",
+    "file": "src/app.js",
+    "from": "if (this.dataState !== 'ready') {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "/data: not awaited before the first read",
+    "file": "src/app.js",
+    "from": "await this.waitData();",
+    "to": ";"
+  },
+  {
+    "name": "/data: retried 10 times slower",
+    "file": "src/app.js",
+    "from": "}, DATA_RETRY);",
+    "to": "}, DATA_RETRY * 10);"
+  },
+  {
+    "name": "/data: a future date kept",
+    "file": "src/app.js",
+    "from": "const kept = Math.min(data.lastAttemptAt, at);",
+    "to": "const kept = data.lastAttemptAt;"
+  },
+  {
+    "name": "temperature: range not checked",
+    "file": "src/owserver/families.js",
+    "from": "if (value < TEMP_MIN || value > TEMP_MAX) return { error: 'out_of_range' };",
+    "to": ";"
+  },
+  {
+    "name": "temperature: format not checked",
+    "file": "src/owserver/families.js",
+    "from": "if (!DECIMAL.test(trimmed)) return { error: 'unreadable' };",
+    "to": ";"
+  },
+  {
+    "name": "counter: 32-bit bound not checked",
+    "file": "src/owserver/families.js",
+    "from": "if (value > COUNTER_MAX) return { error: 'out_of_range' };",
+    "to": ";"
+  },
+  {
+    "name": "directory: entries not bounded",
+    "file": "src/owserver/families.js",
+    "from": ".slice(0, MAX_ENTRIES)",
+    "to": ""
+  },
+  {
+    "name": "protocol: oversized payload kept",
+    "file": "src/owserver/protocol.js",
+    "from": "if (payloadLength > this.maxPayload) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "protocol: pings taken as answers",
+    "file": "src/owserver/protocol.js",
+    "from": "if (payloadLength < 0) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "client: requests in parallel",
+    "file": "src/owserver/client.js",
+    "from": "const run = this.queue.then(job, job);",
+    "to": "const run = job();"
+  },
+  {
+    "name": "client: refused port not unreachable",
+    "file": "src/owserver/client.js",
+    "from": "'ECONNREFUSED',",
+    "to": ""
+  },
+  {
+    "name": "session: late answer of an old address published",
+    "file": "src/app.js",
+    "from": "const gone = () => session !== this.session || !this.running || epoch !== this.epoch;",
+    "to": "const gone = () => !this.running;"
+  },
+  {
+    "name": "session: old client not closed",
+    "file": "src/app.js",
+    "from": "this.session?.client?.close();",
+    "to": ";"
+  },
+  {
+    "name": "round: no budget",
+    "file": "src/app.js",
+    "from": "if (down || this.monotonic() - started >= ROUND_BUDGET) {",
+    "to": "if (down) {"
+  },
+  {
+    "name": "round: server down does not stop it",
+    "file": "src/app.js",
+    "from": "if (err.code === 'unreachable') down = true;",
+    "to": ";"
+  },
+  {
+    "name": "round: 64 devices not bounded",
+    "file": "src/app.js",
+    "from": "const listed = probes.slice(0, MAX_PROBES);",
+    "to": "const listed = probes;"
+  },
+  {
+    "name": "status: none read is connected",
+    "file": "src/app.js",
+    "from": "if (o.listed.length > 0 && o.readings.length === 0) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "connected: getConfig not retried",
+    "file": "src/app.js",
+    "from": "this.connected().catch(() => {});",
+    "to": ";"
+  },
+  {
+    "name": "start: published states not forgotten",
+    "file": "src/app.js",
+    "from": "this.gladys.forgetPublishedStates?.();",
+    "to": ";"
+  },
+  {
+    "name": "inputs: level published as is",
+    "file": "src/devices.js",
+    "from": "(sensed === 0 ? 1 : 0)",
+    "to": "sensed"
+  },
+  {
+    "name": "accept: floor unchanged",
+    "file": "src/app.js",
+    "from": "value: h.to,",
+    "to": "value: floor.value,"
+  },
+  {
+    "name": "accept: stale value of Gladys not ignored",
+    "file": "src/app.js",
+    "from": "ignoreUpTo: Math.max(floor.value, floor.ignoreUpTo ?? -1, fromGladys ?? -1),",
+    "to": "ignoreUpTo: -1,"
+  },
+  {
+    "name": "config: broadcast and multicast accepted",
+    "file": "src/config.js",
+    "from": "return parts[0] === 0 || parts[0] >= 224 || host === '255.255.255.255';",
+    "to": "return false;"
+  },
+  {
+    "name": "stop: no epoch",
+    "file": "src/app.js",
+    "from": "this.epoch += 1;",
+    "to": ";"
+  }
+]

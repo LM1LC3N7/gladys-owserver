@@ -1,67 +1,100 @@
-# Template de démonstration
+# owserver (1-Wire) pour Gladys Assistant
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+Connecteur non officiel, sans lien avec le projet OWFS. Il lit les appareils
+1-Wire servis par un **owserver** (le serveur réseau d'OWFS) qui tourne sur
+votre réseau, par son protocole TCP (port 4304), sans cloud.
+
+Testé contre owserver en mode adaptateur simulé (`owserver --fake`), jamais
+testé avec un vrai bus 1-Wire : dites-nous comment il se comporte avec le vôtre.
 
 ## Ce que vous obtenez
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+Un appareil Gladys par appareil 1-Wire listé à la racine d'owserver, repéré par
+son identifiant ROM (par exemple `28-4AEC29CDBAAB`) : une nouvelle adresse de
+l'owserver, ou la sonde déplacée sur un autre bus, garde son appareil et son
+historique.
+
+| Famille            | Puce                                       | Fonctions                        |
+| ------------------ | ------------------------------------------ | -------------------------------- |
+| 10, 22, 28, 3B, 42 | DS18S20, DS1822, DS18B20, DS1825, DS28EA00 | Température (°C)                 |
+| 26                 | DS2438                                     | Température (°C)                 |
+| 1D                 | DS2423                                     | Compteur A, Compteur B           |
+| 05, 12, 3A, 29     | DS2405, DS2406, DS2413, DS2408             | Entrées, en capteurs d'ouverture |
+
+Les autres familles (DS2450, concentrateurs DS2409, capteurs EDS…) sont
+nommées dans l'état comme « pas encore prises en charge ». Les appareils
+derrière un concentrateur DS2409 ne sont pas lus.
+
+Lecture seule : seules des demandes de liste et de lecture partent, rien n'est
+jamais écrit sur le bus. Les sorties des interrupteurs (DS2406, DS2408,
+DS2413) viendront plus tard.
+
+## Préparer owserver
+
+owserver doit écouter sur le réseau, pas seulement sur localhost. Dans
+`/etc/owfs.conf` de la machine qui porte l'adaptateur 1-Wire :
+
+```
+server: usb = all          # ou : server: i2c = ALL:ALL pour un DS2482
+server: port = 0.0.0.0:4304
+```
+
+puis redémarrez owserver. Vérifiez depuis une autre machine avec
+`owdir -s 192.168.1.30:4304 /`.
 
 ## Configuration
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+- **Adresse de l'owserver** : son adresse IP ou son nom d'hôte, avec un port
+  seulement s'il n'est pas 4304.
+- **Intervalle de lecture** : 30 s, 1 min (par défaut), 2 ou 5 min. Avec
+  beaucoup d'appareils, l'intervalle est allongé pour qu'une lecture complète
+  reste sous 250 valeurs par minute (64 appareils lus au plus).
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+Ouvrez ensuite l'onglet **Découverte** et créez les appareils voulus.
 
-## Actions
+## Comment les valeurs sont vérifiées
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+- Les températures sont demandées en Celsius quel que soit le réglage
+  d'owserver. Une valeur hors de -55 à +125 °C, ou un texte qui n'est pas un
+  nombre, n'est pas publiée.
+- **85 °C** est la valeur d'une DS18x20 qui n'a pas converti (une coupure
+  d'alimentation, une sonde en alimentation parasite qui l'a perdue) : elle est
+  retenue, sauf si la température précédente de cette sonde en était à moins de
+  10 °C. L'état nomme la sonde ; vérifiez son alimentation.
+- Les **compteurs** (DS2423) ne baissent jamais dans Gladys : une valeur plus
+  basse (un compteur sans pile repart de 0 après une coupure de courant) est
+  retenue et l'état le dit. Quand elle est juste, cliquez sur **Accepter les
+  baisses de compteur** : chaque compteur retenu prend sa valeur plus basse
+  comme nouveau départ, publiée dès la lecture suivante. Enregistrer la
+  configuration ne le fait jamais.
+- **Entrées** : owserver donne le niveau de la broche. Une broche tirée au
+  niveau bas (un contact fermé à la masse) s'affiche **fermée**, une broche au
+  niveau haut (un contact ouvert, avec sa résistance de rappel) **ouverte**.
+- Un appareil en échec (parti du bus, erreur de bus, valeur illisible) laisse
+  seulement cet appareil non lu ; l'état le nomme. Un tour de lecture ne commence
+  plus d'appareil après 60 s : les appareils restants sont lus en premier la
+  fois suivante.
 
-## Scènes
+## Boutons
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+- **Tester la connexion** : lit l'owserver une fois quand une lecture est due
+  (jamais plus d'une par intervalle), sinon donne la dernière lecture.
+- **Accepter les baisses de compteur** : voir plus haut.
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+## Messages d'état
 
-## Tableau de bord
+L'écran de configuration montre l'adresse, le nombre d'appareils lus, et des
+notes : appareils non lus (et pourquoi), 85 °C retenu, compteurs retenus,
+familles pas encore prises en charge, appareils pas créés dans Gladys, dossier
+`/data` illisible (les compteurs ne sont alors vérifiés que par rapport aux
+valeurs que Gladys garde et rien n'est enregistré ; nouvel essai toutes les
+10 s).
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+## Vie privée et sécurité
 
-## Dépannage
+owserver n'a pas d'identifiants : rien de secret n'est configuré, gardé ni
+journalisé. L'intégration ne garde dans son dossier `/data` que l'heure de la
+dernière lecture, les identifiants ROM vus et les valeurs des compteurs.
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+OWFS est distribué sous GPL 2.0 ; cette intégration n'en contient aucun code et
+parle seulement à owserver par le réseau (voir `THIRD_PARTY_NOTICES.md`).

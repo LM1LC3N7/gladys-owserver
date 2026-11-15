@@ -1,61 +1,94 @@
-# Demo Devices Template
+# owserver (1-Wire) for Gladys Assistant
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+Unofficial connector, not affiliated with the OWFS project. It reads the 1-Wire
+devices served by an **owserver** (the network server of OWFS) running on your
+network, over its TCP protocol (port 4304), without any cloud.
+
+Tested against owserver in its fake-adapter mode (`owserver --fake`), never
+tested with a real 1-Wire bus: tell us how it works with yours.
 
 ## What you get
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+One Gladys device per 1-Wire device listed at the root of owserver, keyed by
+its ROM id (for example `28-4AEC29CDBAAB`): a new address of the owserver, or
+the probe moved to another bus, keeps its device and its history.
+
+| Family             | Chip                                       | Features                   |
+| ------------------ | ------------------------------------------ | -------------------------- |
+| 10, 22, 28, 3B, 42 | DS18S20, DS1822, DS18B20, DS1825, DS28EA00 | Temperature (°C)           |
+| 26                 | DS2438                                     | Temperature (°C)           |
+| 1D                 | DS2423                                     | Counter A, Counter B       |
+| 05, 12, 3A, 29     | DS2405, DS2406, DS2413, DS2408             | Inputs, as opening sensors |
+
+Other families (DS2450, DS2409 hubs, EDS sensors...) are named in the status
+as "not supported yet". Devices behind a DS2409 hub are not read.
+
+Read-only: only directory and read requests are sent, nothing is ever written
+to the bus. The outputs of the switches (DS2406, DS2408, DS2413) will come
+later.
+
+## Setting up owserver
+
+owserver must listen on the network, not only on localhost. In
+`/etc/owfs.conf` of the machine that holds the 1-Wire adapter:
+
+```
+server: usb = all          # or: server: i2c = ALL:ALL for a DS2482
+server: port = 0.0.0.0:4304
+```
+
+then restart owserver. Check from another machine with
+`owdir -s 192.168.1.30:4304 /`.
 
 ## Configuration
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+- **owserver address**: its IP address or host name, with a port only if it is
+  not 4304.
+- **Read interval**: 30 s, 1 min (default), 2 or 5 min. With many devices the
+  interval is lengthened so that a full read stays under 250 values a minute
+  (64 devices are read at most).
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+Then open the **Discover** tab and create the devices you want.
 
-## Actions
+## How values are checked
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+- Temperatures are asked in Celsius whatever owserver is set to. A value
+  outside -55 to +125 °C, or a text that is not a number, is not published.
+- **85 °C** is the value a DS18x20 gives when it did not convert (a power
+  glitch, a parasite-powered probe that lost its supply): it is held back,
+  unless the previous temperature of that probe was within 10 °C of it. The
+  status names the probe; check its power supply.
+- **Counters** (DS2423) never go down in Gladys: a lower value (a counter
+  without battery starts again from 0 after a power cut) is held back and the
+  status says so. When it is right, click **Accept the counter drops**: each
+  counter held takes its lower value as its new start, published from the next
+  read. Saving the configuration never does it.
+- **Inputs**: owserver gives the level of the pin. A pin pulled low (a contact
+  closed to ground) is shown as **closed**, a pin held high (a contact open,
+  with its pull-up) as **open**.
+- A device that fails (gone from the bus, a bus error, a value not readable)
+  leaves only that device unread; the status names it. A round of reads starts
+  no new device after 60 s: the devices left over are read first next time.
 
-## Scenes
+## Buttons
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+- **Test the connection**: reads the owserver once when a read is due (never
+  more than one per interval), otherwise tells the last read.
+- **Accept the counter drops**: see above.
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+## Status messages
 
-## Dashboard
+The configuration screen shows the address, how many devices were read, and
+notes: devices not read (and why), 85 °C held back, counters held back,
+families not supported yet, devices not created in Gladys, a `/data` folder
+that cannot be read (then counters are checked only against the values Gladys
+holds and nothing is saved; tried again every 10 s).
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+## Privacy and security
 
-## Troubleshooting
+owserver has no login: nothing secret is configured, stored or logged. The
+integration keeps in its `/data` folder only the time of the last read, the
+ROM ids seen and the counter values.
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+OWFS is distributed under the GPL 2.0; this integration contains none of its
+code and only talks to owserver over the network (see `THIRD_PARTY_NOTICES.md`).

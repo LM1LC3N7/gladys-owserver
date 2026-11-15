@@ -1,177 +1,84 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "owserver (1-Wire)",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Unofficial: 1-Wire probes read on an owserver (OWFS) of your network: temperatures, counters.",
+    "fr": "Non officiel : sondes 1-Wire lues sur un owserver (OWFS) du réseau : températures, compteurs."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-owserver:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-owserver/main/cover.png",
+  "categories": ["protocols"],
+  "transports": ["local"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": { "en": "owserver (1-Wire)", "fr": "owserver (1-Wire)" },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Unofficial connector, not affiliated with the OWFS project. It reads the 1-Wire devices served by an owserver (the network server of OWFS, port 4304) running on your network, for example on a Raspberry Pi with a DS9490R or DS2482 adapter: one device per 1-Wire device, with the temperature of the DS18B20, DS18S20, DS1822, DS1825, DS28EA00 and DS2438 probes, the two counters of a DS2423, and the inputs of the DS2405, DS2406, DS2408 and DS2413 as opening sensors. Read-only: nothing is ever written to the bus (the outputs will come later). Tested against owserver in its fake-adapter mode, never tested with a real 1-Wire bus.",
+        "fr": "Connecteur non officiel, sans lien avec le projet OWFS. Il lit les appareils 1-Wire servis par un owserver (le serveur réseau d'OWFS, port 4304) qui tourne sur votre réseau, par exemple sur un Raspberry Pi avec un adaptateur DS9490R ou DS2482 : un appareil par appareil 1-Wire, avec la température des sondes DS18B20, DS18S20, DS1822, DS1825, DS28EA00 et DS2438, les deux compteurs d'un DS2423, et les entrées des DS2405, DS2406, DS2408 et DS2413 en capteurs d'ouverture. Lecture seule : rien n'est jamais écrit sur le bus (les sorties viendront plus tard). Testé contre owserver en mode adaptateur simulé, jamais testé avec un vrai bus 1-Wire."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/LM1LC3N7/gladys-owserver/blob/main/docs/fr.md",
+          "label": { "en": "Guide (French)", "fr": "Guide (français)" }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-owserver/blob/main/docs/en.md",
+          "label": { "en": "Guide (English)", "fr": "Guide (anglais)" }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
+      "key": "address",
+      "type": "string",
       "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "label": { "en": "owserver address", "fr": "Adresse de l'owserver" },
+      "description": {
+        "en": "The IP address (or host name) of the machine running owserver, with a port only if it is not 4304. owserver must listen on the network (for example \"server: port = 0.0.0.0:4304\" in /etc/owfs.conf), not only on localhost. Each 1-Wire device keeps its Gladys device if the address changes (they are keyed by their ROM id).",
+        "fr": "L'adresse IP (ou le nom d'hôte) de la machine où tourne owserver, avec un port seulement s'il n'est pas 4304. owserver doit écouter sur le réseau (par exemple « server: port = 0.0.0.0:4304 » dans /etc/owfs.conf), pas seulement sur localhost. Chaque appareil 1-Wire garde son appareil Gladys si l'adresse change (ils sont repérés par leur identifiant ROM)."
+      },
+      "placeholder": { "en": "e.g. 192.168.1.30", "fr": "ex. 192.168.1.30" }
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
+      "key": "interval_seconds",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
       "required": false,
-      "default": "celsius",
-      "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
-      ]
-    },
-    {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "default": "60",
+      "label": { "en": "Read interval", "fr": "Intervalle de lecture" },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "How often the 1-Wire devices are read. With many devices, the interval is lengthened so that a full read stays under 250 values a minute.",
+        "fr": "La fréquence de lecture des appareils 1-Wire. Avec beaucoup d'appareils, l'intervalle est allongé pour qu'une lecture complète reste sous 250 valeurs par minute."
       },
-      "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "options": [
+        { "value": "30", "label": { "en": "30 seconds", "fr": "30 secondes" } },
+        { "value": "60", "label": { "en": "1 minute", "fr": "1 minute" } },
+        { "value": "120", "label": { "en": "2 minutes", "fr": "2 minutes" } },
+        { "value": "300", "label": { "en": "5 minutes", "fr": "5 minutes" } }
+      ]
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
+      "key": "test_connection",
+      "timeout_seconds": 60,
+      "label": { "en": "Test the connection", "fr": "Tester la connexion" },
+      "description": {
+        "en": "Reads the owserver once when a read is due (never more than one per interval), otherwise tells the last read: its 1-Wire devices and their values.",
+        "fr": "Lit l'owserver une fois quand une lecture est due (jamais plus d'une par intervalle), sinon donne la dernière lecture : ses appareils 1-Wire et leurs valeurs."
+      }
     },
     {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
-    }
-  ],
-  "scene_triggers": [
-    {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "accept_counter_drops",
+      "timeout_seconds": 30,
+      "label": { "en": "Accept the counter drops", "fr": "Accepter les baisses de compteur" },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
-      },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
-        },
-        {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
-          "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
-          ]
-        }
-      ],
-      "variables": [
-        {
-          "key": "target",
-          "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
-        }
-      ]
-    }
-  ],
-  "scene_actions": [
-    {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
-      },
-      "timeout_seconds": 15,
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ],
-      "outputs": [
-        {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
-        }
-      ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+        "en": "Only when the status shows a DS2423 counter held back because it went down (a counter without battery starts again from 0 after a power cut). Takes the lower value of each counter held as its new start: it is published from the next read. Saving the configuration never does it.",
+        "fr": "Seulement quand l'état affiche un compteur DS2423 retenu parce qu'il a baissé (un compteur sans pile repart de 0 après une coupure de courant). Prend la valeur plus basse de chaque compteur retenu comme nouveau départ : elle est publiée dès la lecture suivante. Enregistrer la configuration ne le fait jamais."
+      }
     }
   ]
 }
