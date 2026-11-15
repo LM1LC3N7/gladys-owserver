@@ -21,4 +21,7 @@ the notes of the version's GitHub Release.
   -55..125 °C, the 85 °C power-on value held back, counters never lower in
   Gladys (a drop held until "Accept the counter drops").
 - A read interval of 30 s to 5 min, lengthened with many devices (a full read under 250 values a
-  minute), kept across restarts.
+  minute), kept across restarts; the bus rests at least half an interval
+  between two rounds.
+- A `/data` write that does not finish never holds the reads nor the stop.
+- CI jobs bounded by `timeout-minutes`.

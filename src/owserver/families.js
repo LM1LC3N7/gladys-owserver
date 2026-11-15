@@ -124,7 +124,8 @@ export function parseValues(familyCode, text) {
     const value = Number(trimmed);
     if (!Number.isFinite(value)) return { error: 'unreadable' };
     if (value < TEMP_MIN || value > TEMP_MAX) return { error: 'out_of_range' };
-    return { values: [[keys[0], Number(value.toFixed(2))]] };
+    // `raw`: the value before rounding (84.996 is not the 85 °C power-on value).
+    return { values: [[keys[0], Number(value.toFixed(2))]], raw: value };
   }
   const parts = text.split(',').map((part) => part.trim());
   // A DS2406 in its small package has one channel only: fewer values than

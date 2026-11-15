@@ -85,7 +85,7 @@ test('real clock: reads at 0, the interval and twice the interval; timers bounde
     assert.ok(gap >= 0.9 * INTERVAL, `never sooner than the interval: ${at}`);
     assert.ok(gap < 1.5 * INTERVAL, `on time: ${at}`);
   }
-  assert.ok(timersSet <= 12, `${timersSet} timers`);
+  assert.ok(timersSet <= 20, `${timersSet} timers`);
   assert.equal(gladys.fake.connectionStatus.connected, true);
   const states = Object.fromEntries(
     gladys.fake.states.map((s) => [s.device_feature_external_id, s.state]),

@@ -33,7 +33,7 @@ test('the root directory: the supported devices, the other families, nothing els
 
 test('the root directory: duplicates, aliases, paths and junk are ignored', () => {
   const { probes, others } = parseDirectory(
-    '/28.4AEC29CDBAAB,/28.4AEC29CDBAAB, /28.4AEC29CDBAAC ,/kitchen,/28.4aec29cdbaab,/28.4AEC29CDBAAB/x,/../28.4AEC29CDBAAB,/28.4AEC29CDBAA,/__proto__,,/99.000000000000',
+    'x/28.4AEC29CDBAAD,/28.4AEC29CDBAAEx,/28.4AEC29CDBAAB,/28.4AEC29CDBAAB, /28.4AEC29CDBAAC ,/kitchen,/28.4aec29cdbaab,/28.4AEC29CDBAAB/x,/../28.4AEC29CDBAAB,/28.4AEC29CDBAA,/__proto__,,/99.000000000000',
   );
   assert.deepEqual(
     probes.map((p) => p.id),
@@ -55,9 +55,17 @@ test('the path of a device from its id', () => {
 });
 
 test('temperatures: strict numbers, the range of the probes, never text as 0', () => {
-  assert.deepEqual(parseValues('28', '     21.5625'), { values: [['temperature', 21.56]] });
-  assert.deepEqual(parseValues('28', '-10.125'), { values: [['temperature', -10.13]] });
-  assert.deepEqual(parseValues('26', ' 0'), { values: [['temperature', 0]] });
+  assert.deepEqual(parseValues('28', '     21.5625'), {
+    values: [['temperature', 21.56]],
+    raw: 21.5625,
+  });
+  assert.deepEqual(parseValues('28', '-10.125').values, [['temperature', -10.13]]);
+  assert.deepEqual(parseValues('26', ' 0').values, [['temperature', 0]]);
+  // The bounds of the probes are values.
+  assert.deepEqual(parseValues('28', '-55').values, [['temperature', -55]]);
+  assert.deepEqual(parseValues('28', '125').values, [['temperature', 125]]);
+  // 84.996 rounds to 85 but is not the power-on value.
+  assert.equal(parseValues('28', '84.996').raw, 84.996);
   for (const bad of ['', '   ', 'abc', '1e2', '0x10', '21,5', '- 3', '21.', '.5', 'NaN', '1234']) {
     assert.deepEqual(parseValues('28', bad), { error: 'unreadable' }, JSON.stringify(bad));
   }
@@ -104,6 +112,8 @@ test('inputs: 0 or 1 only, a single channel DS2406 taken in order', () => {
 test('85 °C is the power-on value of the DS18x20 family only', () => {
   assert.equal(isPowerOnValue('28', 85), true);
   assert.equal(isPowerOnValue('10', 85), true);
+  for (const code of ['22', '3B', '42']) assert.equal(isPowerOnValue(code, 85), true, code);
+  assert.equal(isPowerOnValue('28', 84.996), false);
   assert.equal(isPowerOnValue('28', 85.06), false);
   assert.equal(isPowerOnValue('26', 85), false);
 });

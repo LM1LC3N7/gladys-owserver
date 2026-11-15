@@ -334,27 +334,35 @@ test('the round budget: a slow bus leaves the rest for the next round, in turn',
 
 test('a new address: the late answer of the old one publishes nothing', async () => {
   const bus = defaultBus();
-  bus['/'] = 'hang';
+  let finish;
+  // An answer already on its way: it arrives even though the client closed.
+  bus['/'] = () => new Promise((resolve) => (finish = resolve));
   const server = createServer(bus);
   const t = await setup({ server });
   await t.app.start(CONFIG);
   await t.advance(0);
   await t.settle();
-  assert.equal(server.hanging.length, 1);
   const oldClient = server.client;
   await t.app.start({ address: '192.168.1.31' });
   assert.equal(oldClient.closed, true);
   server.bus['/'] = defaultBus()['/'];
-  server.release(defaultBus()['/']);
+  finish(defaultBus()['/']);
   await t.settle();
   assert.equal(t.gladys.fake.states.length, 0);
+  assert.equal(server.count(P(T28, 'temperature')), 0);
+  assert.match(status(t.gladys).message.en, /Waiting for the first read of 192\.168\.1\.31/);
   await t.app.stop();
 });
 
 test('a stop: no timer left, nothing read after it', async () => {
   const t = await setup();
   await t.start();
+  await t.app.testConnection();
+  const saves = t.store.saves;
   await t.app.stop();
+  // Counted at once: a lost timer would have fired after 10 minutes.
+  assert.equal(t.pending.size, 0);
+  assert.ok(t.store.saves > saves, '/data written by a clean stop');
   const reads = t.server.requests.length;
   await t.wait(10 * MINUTE);
   assert.equal(t.server.requests.length, reads);
@@ -555,4 +563,240 @@ test('a read running across a stop and a start publishes nothing', async () => {
   assert.equal(t.gladys.fake.states.length, 0);
   assert.equal(server.count(P(T28, 'temperature')), 0);
   await t.app.stop();
+});
+
+test('a stop while a read hangs: bounded, the client closed, no timer left', async () => {
+  const bus = defaultBus();
+  bus['/'] = 'hang';
+  const server = createServer(bus);
+  const t = await setup({ server });
+  await t.app.start(CONFIG);
+  await t.advance(0);
+  await t.settle();
+  const client = server.client;
+  // The read ends with the closed client, long before the 5 s of STOP_WAIT.
+  await t.app.stop();
+  assert.equal(client.closed, true);
+  assert.equal(t.pending.size, 0);
+});
+
+test('a /data write that never answers holds neither the reads nor the stop', async () => {
+  const store = createMemoryStore();
+  const t = await setup({ store });
+  await t.start();
+  assert.equal(t.server.count('/'), 1);
+  // From now on, every save hangs for ever.
+  let hung = 0;
+  store.save = () => {
+    hung += 1;
+    return new Promise(() => {});
+  };
+  for (let i = 0; i < 4; i += 1) {
+    await t.advance(60 * SECOND);
+    await t.settle();
+    await t.advance(10 * SECOND);
+    await t.settle();
+    await t.advance(10 * SECOND);
+    await t.settle();
+  }
+  assert.ok(t.server.count('/') >= 4, `${t.server.count('/')} reads`);
+  assert.equal(hung, 1, 'one write at a time');
+  assert.match(status(t.gladys).message.en, /does not finish writing/);
+  const stopping = t.app.stop();
+  for (let i = 0; i < 6; i += 1) {
+    await t.settle();
+    await t.advance(10 * SECOND);
+  }
+  let done = false;
+  stopping.then(() => (done = true));
+  await t.settle();
+  assert.equal(done, true, 'stop() is bounded');
+});
+
+test('a round longer than the interval: the bus rests half an interval', async () => {
+  const bus = defaultBus();
+  const t = await setup({ server: createServer(bus) });
+  for (const key of Object.keys(bus)) {
+    if (key === '/') continue;
+    const value = bus[key];
+    bus[key] = async () => {
+      await t.advance(15 * SECOND);
+      return value;
+    };
+  }
+  // 4 devices of 15 s: a round of 60 s for an interval of 30 s.
+  await t.start({ ...CONFIG, interval_seconds: '30' });
+  assert.equal(t.server.count('/'), 1);
+  await t.wait(14 * SECOND);
+  assert.equal(t.server.count('/'), 1, 'resting');
+  await t.wait(1 * SECOND);
+  assert.equal(t.server.count('/'), 2);
+  t.app.doStop();
+});
+
+test('a counter that rises again after an accepted drop is never held by the old value of Gladys', async () => {
+  const bus = defaultBus();
+  bus[P(C1D, 'counters.ALL')] = '100,300';
+  const t = await setup({ server: createServer(bus) });
+  t.gladys.fake.devices.push(created(t.gladys, C1D, '1D', { counter_a: 500 }));
+  await t.gladys.getDevices();
+  await t.start();
+  await t.app.acceptCounterDrops();
+  for (const value of [101, 102, 103]) {
+    t.server.bus[P(C1D, 'counters.ALL')] = `${value},300`;
+    await t.wait(60 * SECOND);
+    assert.equal(t.lastStates()[F(C1D, 'counter_a')], value);
+  }
+  await t.app.stop();
+});
+
+test('/data read late: the highest floor of /data and memory wins', async () => {
+  const store = createMemoryStore({
+    floors: { [`${C1D}:counter_a`]: { value: 500 }, [`${C1D}:counter_b`]: { value: 100 } },
+  });
+  let release;
+  store.slowLoad = new Promise((resolve) => (release = resolve));
+  const t = await setup({ store });
+  await t.app.start(CONFIG);
+  await t.advance(0);
+  await t.settle();
+  await t.advance(10 * SECOND);
+  await t.settle();
+  // Read without /data: 206 and 208 published (no floor known yet).
+  assert.equal(t.lastStates()[F(C1D, 'counter_b')], 208);
+  release();
+  await t.settle();
+  await t.app.idle();
+  t.server.bus[P(C1D, 'counters.ALL')] = '300,150';
+  await t.wait(60 * SECOND);
+  const held = t.app.heldList();
+  assert.deepEqual(
+    held.map((h) => [h.key, h.from, h.to]),
+    [
+      ['counter_a', 500, 300],
+      ['counter_b', 208, 150],
+    ],
+  );
+  await t.app.stop();
+});
+
+test('floors of /data and values of Gladys that are not counts are ignored', async () => {
+  const store = createMemoryStore({
+    floors: {
+      [`${C1D}:counter_a`]: { value: 1e99 },
+      [`${C1D}:counter_b`]: { value: -5 },
+      __proto__: { value: 1 },
+    },
+  });
+  const t = await setup({ store });
+  t.gladys.fake.devices.push(created(t.gladys, C1D, '1D', { counter_a: 1.5 }));
+  await t.gladys.getDevices();
+  await t.start();
+  assert.equal(t.lastStates()[F(C1D, 'counter_a')], 206);
+  assert.equal(t.lastStates()[F(C1D, 'counter_b')], 208);
+  await t.app.stop();
+  for (const bad of [1e99, -1, 'abc']) {
+    const u = await setup();
+    u.gladys.fake.devices.push(created(u.gladys, C1D, '1D', { counter_b: bad }));
+    await u.gladys.getDevices();
+    await u.start();
+    assert.equal(u.lastStates()[F(C1D, 'counter_b')], 208, String(bad));
+    await u.app.stop();
+  }
+});
+
+test('getConfig(): a stop cancels the retry; a success resets the spacing', async () => {
+  const t = await setup();
+  const real = t.gladys.getConfig.bind(t.gladys);
+  let fail = true;
+  let calls = 0;
+  t.gladys.getConfig = async () => {
+    calls += 1;
+    if (fail) throw new Error('boom');
+    return real();
+  };
+  await t.app.connected();
+  await t.wait(5 * SECOND);
+  assert.equal(calls, 2);
+  await t.app.stop();
+  await t.wait(10 * MINUTE);
+  assert.equal(calls, 2, 'no retry after a stop');
+  fail = false;
+  await t.app.connected();
+  assert.equal(calls, 3);
+  fail = true;
+  await t.app.connected();
+  await t.wait(5 * SECOND);
+  assert.equal(calls, 5, 'spacing back to 5 s after a success');
+  await t.app.stop();
+});
+
+test('an owserver down for long: retries capped at 10 minutes', async () => {
+  const bus = defaultBus();
+  bus['/'] = unreachable();
+  const t = await setup({ server: createServer(bus) });
+  await t.start();
+  const gaps = [60, 60, 120, 240, 480, 600, 600];
+  for (const gap of gaps) {
+    const before = t.server.count('/');
+    await t.wait((gap - 1) * SECOND);
+    assert.equal(t.server.count('/'), before, `not before ${gap} s`);
+    await t.wait(1 * SECOND);
+    assert.equal(t.server.count('/'), before + 1, `at ${gap} s`);
+  }
+  await t.app.stop();
+});
+
+test('a start sends the status again even when it did not change (Gladys restarted)', async () => {
+  const t = await setup();
+  await t.start();
+  const sent = t.gladys.fake.connectionStatuses.length;
+  await t.app.updateStatus();
+  assert.equal(t.gladys.fake.connectionStatuses.length, sent, 'not sent twice in a row');
+  await t.start();
+  assert.ok(t.gladys.fake.connectionStatuses.length > sent);
+  await t.app.stop();
+});
+
+test('85 °C after 100 °C is held back (too far from it)', async () => {
+  const bus = defaultBus();
+  bus[P(T28, 'temperature')] = '100';
+  const t = await setup({ server: createServer(bus) });
+  await t.start();
+  t.server.bus[P(T28, 'temperature')] = '85';
+  await t.wait(60 * SECOND);
+  assert.equal(t.lastStates()[F(T28, 'temperature')], 100);
+  t.server.bus[P(T28, 'temperature')] = '84.996';
+  await t.wait(60 * SECOND);
+  assert.equal(t.lastStates()[F(T28, 'temperature')], 85, '84.996 is a measure');
+  await t.app.stop();
+});
+
+test('an unchanged value is sent again after 10 minutes (heartbeat asked of the SDK)', async () => {
+  const t = await setup();
+  const options = [];
+  const real = t.gladys.publishChangedStates.bind(t.gladys);
+  t.gladys.publishChangedStates = (states, opts) => {
+    options.push(opts);
+    return real(states, opts);
+  };
+  await t.start();
+  assert.deepEqual(options, [{ heartbeat: 10 * MINUTE }]);
+  await t.app.stop();
+});
+
+test('a stop waiting for a read that ends by itself: its wait timer is cleared', async () => {
+  const bus = defaultBus();
+  const t = await setup({ server: createServer(bus) });
+  let finish;
+  // A read that does not end with the closed client, but 2 s later.
+  bus['/'] = () => new Promise((resolve) => (finish = resolve));
+  await t.app.start(CONFIG);
+  await t.advance(0);
+  await t.settle();
+  const stopping = t.app.stop();
+  await t.settle();
+  finish(defaultBus()['/']);
+  await stopping;
+  assert.equal(t.pending.size, 0);
 });

@@ -255,3 +255,49 @@ test('the answer reader: header and payload byte by byte', () => {
   assert.deepEqual({ ret: result.ret, data: result.data.toString() }, { ret: 3, data: '1,0' });
   assert.equal(reader.pings, 1);
 });
+
+test('dirall: an error of owserver on the directory is an error, never an empty list', async (t) => {
+  const srv = await server(t, (req, socket) => socket.end(answer(-5)));
+  await assert.rejects(client(srv).dirall('/'), (err) => err.code === 'server' && err.errno === 5);
+});
+
+test('a reset in the middle of an answer is "closed", not "unreachable"', async (t) => {
+  const srv = await server(t, (req, socket) => {
+    socket.write(answer(12, Buffer.from('     53.1376')).subarray(0, 26));
+    setTimeout(() => socket.resetAndDestroy(), 20);
+  });
+  await assert.rejects(client(srv).read('/x'), (err) => err.code === 'closed');
+});
+
+test('the answer reader: 65536 bytes taken, 65537 refused at the header', () => {
+  const head = (length) => {
+    const h = Buffer.alloc(24);
+    h.writeInt32BE(length, 4);
+    h.writeInt32BE(0, 8);
+    h.writeInt32BE(length, 16);
+    return h;
+  };
+  const ok = new AnswerReader();
+  assert.equal(ok.push(head(65536)), undefined);
+  assert.equal(ok.push(Buffer.alloc(65536, 0x41)).data.length, 65536);
+  assert.throws(() => new AnswerReader().push(head(65537)), /too_big/);
+});
+
+test('the answer reader: a negative size keeps the whole payload', () => {
+  const h = Buffer.alloc(24);
+  h.writeInt32BE(4, 4);
+  h.writeInt32BE(4, 8);
+  h.writeInt32BE(-1, 16);
+  const result = new AnswerReader().push(Buffer.concat([h, Buffer.from('12.5')]));
+  assert.equal(result.data.toString(), '12.5');
+});
+
+test('the time bounds of a request are pinned', async () => {
+  const c = await import('../src/constants.js');
+  assert.equal(c.REQUEST_TIMEOUT, 10_000);
+  assert.equal(c.IDLE_TIMEOUT, 5_000);
+  assert.equal(c.MAX_PAYLOAD, 65_536);
+  const defaults = new OwClient({ host: '127.0.0.1', port: 1 });
+  assert.equal(defaults.requestTimeout, 10_000);
+  assert.equal(defaults.idleTimeout, 5_000);
+});

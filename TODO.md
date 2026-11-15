@@ -26,6 +26,16 @@
 
 ## Later
 
+- Review r1, minors left: (a) the previous temperature of the 85 °C check is
+  in memory only; a probe really at 85.000 °C from the start is never
+  published (documented). (e) A first read of more than 300 features goes out
+  in one `publishChangedStates` (the SDK sends the rest at the next call). (f)
+  A state file that is not valid JSON is started again from empty and written
+  over (documented; the floor then rests on the value Gladys holds). (d) No
+  test for `ENOTFOUND` / `EHOSTUNREACH` (they would need a network).
+- To confirm by Louis (review r1, h): category `protocols` only, or also
+  `climate` for the temperatures (rule 2 of the categories spec, §3).
+
 - Outputs of the DS2406, DS2408, DS2413 (PIO), behind an option, never a
   switch for anything a "turn everything off" could trigger.
 - DS2438 humidity and voltages (only when a humidity sensor is wired: the

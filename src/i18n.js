@@ -137,6 +137,10 @@ export const T = {
       'Le dossier /data ne peut pas être lu : les compteurs ne sont vérifiés que par rapport à Gladys, rien n’est enregistré ; nouvel essai toutes les 10 s.',
     ),
     dataSlow: both('The /data folder is slow to read.', 'Le dossier /data est lent à lire.'),
+    dataWriteSlow: both(
+      'The /data folder does not finish writing: values are still read, nothing is kept for a restart.',
+      'Le dossier /data ne finit pas d’écrire : les valeurs sont toujours lues, rien n’est gardé pour un redémarrage.',
+    ),
   },
   test: {
     notYet: (next) =>

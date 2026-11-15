@@ -69,6 +69,8 @@ export function createServer(bus = defaultBus()) {
       read: (path) => answer(path),
       close() {
         client.closed = true;
+        // A request running ends at once, as a closed socket.
+        server.release(new OwError('closed'));
       },
     };
     server.client = client;

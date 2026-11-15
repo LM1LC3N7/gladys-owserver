@@ -56,9 +56,12 @@ Then open the **Discover** tab and create the devices you want.
   outside -55 to +125 °C, or a text that is not a number, is not published.
 - **85 °C** is the value a DS18x20 gives when it did not convert (a power
   glitch, a parasite-powered probe that lost its supply): it is held back,
-  unless the previous temperature of that probe was within 10 °C of it. The
-  status names the probe; check its power supply.
-- **Counters** (DS2423) never go down in Gladys: a lower value (a counter
+  unless the previous temperature of that probe was within 10 °C of it (that
+  previous value is kept in memory only: after a restart, a first 85 °C is held
+  back). The status names the probe; check its power supply.
+- **Counters** (DS2423) do not go down in Gladys (except after you accept a
+  drop, or when `/data` was lost and the device is not created in Gladys yet,
+  since then nothing holds its last value): a lower value (a counter
   without battery starts again from 0 after a power cut) is held back and the
   status says so. When it is right, click **Accept the counter drops**: each
   counter held takes its lower value as its new start, published from the next
@@ -69,6 +72,7 @@ Then open the **Discover** tab and create the devices you want.
 - A device that fails (gone from the bus, a bus error, a value not readable)
   leaves only that device unread; the status names it. A round of reads starts
   no new device after 60 s: the devices left over are read first next time.
+  After a round, the bus rests at least half the interval.
 
 ## Buttons
 
@@ -82,7 +86,9 @@ The configuration screen shows the address, how many devices were read, and
 notes: devices not read (and why), 85 °C held back, counters held back,
 families not supported yet, devices not created in Gladys, a `/data` folder
 that cannot be read (then counters are checked only against the values Gladys
-holds and nothing is saved; tried again every 10 s).
+holds and nothing is saved; tried again every 10 s), or that does not finish
+writing (values are still read; nothing is kept for a restart). A state file
+that is not valid JSON is started again from empty.
 
 ## Privacy and security
 

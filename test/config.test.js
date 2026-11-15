@@ -9,6 +9,7 @@ test('addresses: host and port, 4304 by default, a pasted URL reduced', () => {
   assert.deepEqual(parseAddress('[fe80::1]:4304'), { host: 'fe80::1', port: 4304 });
   assert.deepEqual(parseAddress('fd00::12'), { host: 'fd00::12', port: 4304 });
   assert.deepEqual(parseAddress('raspberrypi'), { host: 'raspberrypi', port: 4304 });
+  assert.deepEqual(parseAddress('10.0.0.2:65535'), { host: '10.0.0.2', port: 65535 });
   assert.deepEqual(parseAddress(''), { empty: true });
 });
 
@@ -25,6 +26,7 @@ test('addresses that are never one server, or not an address, are refused', () =
     'user:pw@192.168.1.30',
     '192.168.1.30:0',
     '192.168.1.30:70000',
+    '192.168.1.30:65536',
     'bad host',
     'a\r\nb',
     'x'.repeat(301),

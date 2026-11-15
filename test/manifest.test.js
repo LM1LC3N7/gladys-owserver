@@ -184,3 +184,22 @@ test('the code never feeds the energy consumption endpoint nor scene events', ()
     assert.doesNotMatch(read(file), /publishSceneEvent\(/, file);
   }
 });
+
+test('the device shape: history kept, bounds of each feature, the model in params', () => {
+  const byFamily = Object.fromEntries(allDevices().map((d) => [d.params[1].value.slice(0, 2), d]));
+  for (const device of Object.values(byFamily)) {
+    for (const f of device.features) assert.equal(f.keep_history, true, f.external_id);
+  }
+  const temp = byFamily['28'].features[0];
+  assert.deepEqual([temp.min, temp.max, temp.unit], [-55, 125, 'celsius']);
+  const counter = byFamily['1D'].features[0];
+  assert.deepEqual([counter.min, counter.max], [0, 4294967295]);
+  const input = byFamily['29'].features[0];
+  assert.deepEqual([input.min, input.max, input.category], [0, 1, 'opening-sensor']);
+  assert.deepEqual(byFamily['28'].params, [
+    { name: 'owserver_address', value: '192.168.1.30' },
+    { name: 'rom_id', value: '28-000000000001' },
+    { name: 'model', value: 'DS18B20' },
+  ]);
+  assert.equal(byFamily['28'].name, 'DS18B20 28-000000000001');
+});

@@ -60,8 +60,12 @@ Ouvrez ensuite l'onglet **Découverte** et créez les appareils voulus.
 - **85 °C** est la valeur d'une DS18x20 qui n'a pas converti (une coupure
   d'alimentation, une sonde en alimentation parasite qui l'a perdue) : elle est
   retenue, sauf si la température précédente de cette sonde en était à moins de
-  10 °C. L'état nomme la sonde ; vérifiez son alimentation.
-- Les **compteurs** (DS2423) ne baissent jamais dans Gladys : une valeur plus
+  10 °C (cette valeur précédente n'est gardée qu'en mémoire : après un
+  redémarrage, un premier 85 °C est retenu). L'état nomme la sonde ; vérifiez
+  son alimentation.
+- Les **compteurs** (DS2423) ne baissent pas dans Gladys (sauf après une baisse
+  acceptée, ou quand `/data` a été perdu et que l'appareil n'est pas encore créé
+  dans Gladys, rien ne gardant alors sa dernière valeur) : une valeur plus
   basse (un compteur sans pile repart de 0 après une coupure de courant) est
   retenue et l'état le dit. Quand elle est juste, cliquez sur **Accepter les
   baisses de compteur** : chaque compteur retenu prend sa valeur plus basse
@@ -73,7 +77,8 @@ Ouvrez ensuite l'onglet **Découverte** et créez les appareils voulus.
 - Un appareil en échec (parti du bus, erreur de bus, valeur illisible) laisse
   seulement cet appareil non lu ; l'état le nomme. Un tour de lecture ne commence
   plus d'appareil après 60 s : les appareils restants sont lus en premier la
-  fois suivante.
+  fois suivante. Après un tour, le bus se repose au moins la moitié de
+  l'intervalle.
 
 ## Boutons
 
@@ -88,7 +93,9 @@ notes : appareils non lus (et pourquoi), 85 °C retenu, compteurs retenus,
 familles pas encore prises en charge, appareils pas créés dans Gladys, dossier
 `/data` illisible (les compteurs ne sont alors vérifiés que par rapport aux
 valeurs que Gladys garde et rien n'est enregistré ; nouvel essai toutes les
-10 s).
+10 s), ou qui ne finit pas d'écrire (les valeurs sont toujours lues ; rien
+n'est gardé pour un redémarrage). Un fichier d'état qui n'est pas du JSON
+valide repart de zéro.
 
 ## Vie privée et sécurité
 

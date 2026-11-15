@@ -93,8 +93,6 @@ export class OwserverApp {
     /** `{ client, discovered }` of the current address; replaced when it changes. */
     this.session = undefined;
     this.running = false;
-    /** Moved by each stop: a read of before gives up after its next await. */
-    this.epoch = 0;
     this.timer = undefined;
     this.busy = undefined;
     this.loopRun = Promise.resolve();
@@ -106,6 +104,11 @@ export class OwserverApp {
     /** /data: 'idle' (not asked yet) | 'loading' | 'ready' | 'unreadable'. */
     this.dataState = 'idle';
     this.dataSlow = false;
+    this.writeSlow = false;
+    /** The write of /data running, if any (one at a time). */
+    this.saving = undefined;
+    /** Monotonic end of the last round: the bus rests between two rounds. */
+    this.lastRoundEndAt = undefined;
     this.loadRun = undefined;
     this.dataTimer = undefined;
     /** The supported devices seen, by id, the most recently seen last. */
@@ -186,7 +189,10 @@ export class OwserverApp {
     return this.serialize(async () => {
       this.cancelConfigRetry();
       this.doStop();
-      this.epoch += 1;
+      // A request running ends now (its socket closed); the next start
+      // builds a new client.
+      this.session?.client?.close();
+      this.session = undefined;
       if (this.dataTimer !== undefined) {
         this.timers.clearTimeout(this.dataTimer);
         this.dataTimer = undefined;
@@ -391,6 +397,10 @@ export class OwserverApp {
    * @returns {Promise<boolean>} whether it was written.
    */
   async saveState() {
+    // One write at a time: the one still running is waited for, bounded.
+    if (this.saving && !(await this.within(this.saving, DATA_WAIT)).done) {
+      return false;
+    }
     if (this.dataState !== 'ready') {
       return false;
     }
@@ -398,17 +408,49 @@ export class OwserverApp {
     for (const [key, floor] of this.floors) {
       floors[key] = floor;
     }
-    try {
-      await this.store.save({
-        version: 1,
-        lastAttemptAt: this.lastAttemptAt ?? null,
-        probes: [...this.probes.keys()].slice(-MAX_KEPT_PROBES),
-        floors,
-      });
-      return true;
-    } catch (err) {
-      this.logger.warn(`owserver: saving /data failed (${err?.code ?? err?.name ?? 'Error'})`);
+    const data = {
+      version: 1,
+      lastAttemptAt: this.lastAttemptAt ?? null,
+      probes: [...this.probes.keys()].slice(-MAX_KEPT_PROBES),
+      floors,
+    };
+    const job = Promise.resolve()
+      .then(() => this.store.save(data))
+      .then(
+        () => true,
+        (err) => {
+          this.logger.warn(`owserver: saving /data failed (${err?.code ?? err?.name ?? 'Error'})`);
+          return false;
+        },
+      );
+    this.saving = job;
+    job.then(() => {
+      if (this.saving === job) this.saving = undefined;
+      if (this.writeSlow) {
+        this.writeSlow = false;
+        if (this.running) this.updateStatus().catch(() => {});
+      }
+    });
+    // A /data that never answers never holds a read nor the stop.
+    const result = await this.within(job, DATA_WAIT);
+    if (!result.done) {
+      this.writeSlow = true;
+      this.logger.warn('owserver: writing /data takes too long; going on without it');
       return false;
+    }
+    return result.value;
+  }
+
+  /** `{ done, value }` of a promise within `ms` (a fake or real timer). */
+  async within(promise, ms) {
+    let timer;
+    const late = new Promise((resolve) => {
+      timer = this.timers.setTimeout(() => resolve({ done: false }), ms);
+    });
+    try {
+      return await Promise.race([promise.then((value) => ({ done: true, value })), late]);
+    } finally {
+      this.timers.clearTimeout(timer);
     }
   }
 
@@ -442,6 +484,10 @@ export class OwserverApp {
   /** The monotonic time from which the next read may start, from the caller's instant `mono`. */
   dueAt(mono) {
     let due = this.lastReadAt === undefined ? mono : this.lastReadAt + this.interval();
+    // A round longer than the interval: the bus still rests half an interval.
+    if (this.lastRoundEndAt !== undefined) {
+      due = Math.max(due, this.lastRoundEndAt + this.interval() / 2);
+    }
     if (this.nextTryAt !== undefined) {
       due = Math.max(due, this.nextTryAt);
     }
@@ -491,12 +537,11 @@ export class OwserverApp {
   async read() {
     const session = this.session;
     const client = session?.client;
-    const epoch = this.epoch;
     if (!client || !this.running) {
       return;
     }
     /** Another address (or a stop) during an await: this read gives up, silently. */
-    const gone = () => session !== this.session || !this.running || epoch !== this.epoch;
+    const gone = () => session !== this.session || !this.running;
     const asked = this.monotonic();
     if (asked < this.dueAt(asked)) {
       return;
@@ -517,10 +562,12 @@ export class OwserverApp {
       result = await this.readAll(client, gone, mono);
     } catch (err) {
       if (gone()) return;
+      this.lastRoundEndAt = this.monotonic();
       await this.failed(err, mono);
       return;
     }
     if (gone() || !result) return;
+    this.lastRoundEndAt = this.monotonic();
     await this.succeeded(result, mono, gone);
   }
 
@@ -560,7 +607,12 @@ export class OwserverApp {
         unread.push({ id: probe.id, code: parsed.error });
         continue;
       }
-      readings.push({ id: probe.id, family: probe.family, values: parsed.values });
+      readings.push({
+        id: probe.id,
+        family: probe.family,
+        values: parsed.values,
+        raw: parsed.raw,
+      });
     }
     this.cursor = listed.length > 0 && tried < listed.length ? (start + tried) % listed.length : 0;
     return {
@@ -607,7 +659,7 @@ export class OwserverApp {
       for (const [key, value] of reading.values) {
         let state;
         if (kind === 'temperature') {
-          if (isPowerOnValue(reading.family, value)) {
+          if (isPowerOnValue(reading.family, reading.raw)) {
             const before = this.lastTemp.get(reading.id);
             if (before === undefined || Math.abs(before - value) > RESET_NEAR) {
               reading.powerOn = true;
@@ -750,6 +802,7 @@ export class OwserverApp {
     const notes = [];
     if (this.dataState === 'unreadable') notes.push(T.notes.dataUnreadable);
     else if (this.dataSlow) notes.push(T.notes.dataSlow);
+    if (this.writeSlow) notes.push(T.notes.dataWriteSlow);
     const held = this.heldList();
     if (held.length > 0) notes.push(T.notes.held(held));
     const o = this.outcome;

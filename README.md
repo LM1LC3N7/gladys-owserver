@@ -21,10 +21,12 @@ Tested against `owserver --fake`, never tested with a real 1-Wire bus.
 - One Gladys device per 1-Wire device, keyed by its ROM id
   (`probe:28-4AEC29CDBAAB`).
 - Values are checked strictly: text is never a 0, temperatures stay within
-  -55..125 °C, the 85 °C power-on value is held back, counters never go down
+  -55..125 °C, the 85 °C power-on value is held back, counters do not go down
   (a drop is held until the user accepts it).
 - The time of the last read, the ROM ids seen and the counter floors are kept
-  in `/data`, never written over when `/data` cannot be read.
+  in `/data`, never written over when `/data` cannot be read (an I/O error; a
+  file that is not valid JSON is started again from empty). A write that does
+  not finish never holds the reads nor the stop.
 
 ## Development
 
