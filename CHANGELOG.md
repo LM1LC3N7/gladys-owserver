@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-15
+
 ### Added
 
 - First version: the 1-Wire devices of an owserver (OWFS) of the local network,
@@ -25,3 +27,6 @@ the notes of the version's GitHub Release.
   between two rounds.
 - A `/data` write that does not finish never holds the reads nor the stop.
 - CI jobs bounded by `timeout-minutes`.
+
+[Unreleased]: https://github.com/LM1LC3N7/gladys-owserver/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-owserver/releases/tag/v0.1.1

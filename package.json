@@ -1,6 +1,6 @@
 {
   "name": "gladys-owserver",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "1-Wire devices read on an owserver (OWFS) of the local network for Gladys Assistant: temperatures, DS2423 counters and inputs, over the owserver TCP protocol (port 4304). Read-only.",
   "type": "module",
