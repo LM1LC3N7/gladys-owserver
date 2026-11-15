@@ -42,3 +42,4 @@
   value is computed even without one), DS2450 voltages, EDS00xx sensors.
 - Devices behind a DS2409 hub (`/1F.xxx/main/`).
 - Persistent connections (flag 0x04) for large buses.
+- [ ] r3 mineurs : STOP_WAIT 5 s → 1 s (stop() ~9 s sous écriture figée), test de durée de stop(), EADDRNOTAVAIL, clé de session sans port, session refaite à chaque start().
